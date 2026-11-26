@@ -6,6 +6,7 @@
     openrapm shrink    step 4 on a step-3 table: each part of every rating multiplied by what holds up
     openrapm swap      step 5 on a step-4 table: the swap adjustment, off as shipped
     openrapm folds     the within-season folds: each season rated from three quarters of its games
+    openrapm errors    every rating's standard error, from the folds that hold back a tenth of a season's games
     openrapm second-prior   the sums Box Adj's line is fitted on, from the folds' held-back games
     openrapm site      the site's data: docs/data/ratings.json, and the Detail view's, similarity, power and bias
                        pages' files when asked
@@ -210,7 +211,8 @@ def _run_folds(args: argparse.Namespace, cfg: dict) -> int:
         return 0
     return run_folds(cfg, args.models, args.base, args.seasons, args.tag, args.reproduce_only, args.pieces,
                      args.whole_season_inputs, args.whole_season_context, args.folds_per_repeat, args.repeats,
-                     args.cut, args.so_far, args.hold_prior_scale, args.blend_through, args.blend_from)
+                     args.cut, args.so_far, args.hold_prior_scale, args.blend_through, args.blend_from,
+                     args.in_progress)
 
 
 def _run_second_prior(args: argparse.Namespace, cfg: dict) -> int:
@@ -622,8 +624,36 @@ def _add_folds(commands) -> None:
     folds.add_argument("--blend-from", type=parse_share, default=PRODUCT.ridge.held_scale_blend_from, metavar="SHARE",
                        help="with --blend-through: held in full until SHARE of the season, the line from there "
                             "(default %(default)s, as shipped; 0 is the line from the first game)")
+    folds.add_argument("--in-progress", action="store_true",
+                       help="the seasons are in progress and --models their own boosters, saved by the build that "
+                            "rated them (`openrapm build --save-models`): the season so far and every fold are rated "
+                            "as that build rates the season.  For the ratings' standard errors (`openrapm errors`); "
+                            "never for step 4")
     _add_jobs(folds)
     folds.set_defaults(run=_run_folds)
+
+
+def _run_errors(args: argparse.Namespace, cfg: dict) -> int:
+    from .errors import run_errors
+    return run_errors(cfg, args.name, args.seasons, [tag for tag in args.folds.split(",") if tag])
+
+
+def _add_errors(commands) -> None:
+    errors = commands.add_parser(
+        "errors", help="every rating's standard error, from the folds that hold back a tenth of a season's games",
+        description="How far each rating would land from the one shown had the season's games come out as another "
+                    "draw of the same schedule: the jackknife over the folds of `openrapm folds --folds-per-repeat "
+                    "10`, each fold's ratings shrunk with the season's published multipliers.  Writes "
+                    "outputs/rating_errors_<NAME>.parquet, the seasons asked for in place of their rows there.")
+    first, last = PRODUCT.shrink.fold_seasons
+    errors.add_argument("--name", default="product",
+                        help="the build whose multipliers are read and whose errors are written (default %(default)s)")
+    errors.add_argument("--seasons", type=parse_seasons, default=parse_seasons(f"{first}-{last}"),
+                        help="the seasons: 2026, 2017-2026 or 2017,2018 (default %(default)s)")
+    errors.add_argument("--folds", metavar="TAG", default=PRODUCT.shrink.extrapolate_folds_tag,
+                        help="the folds, outputs/within/<TAG>/; several with commas, each season read from the first "
+                             "that holds it (default %(default)s)")
+    errors.set_defaults(run=_run_errors)
 
 
 def _add_second_prior(commands) -> None:
@@ -743,6 +773,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_swap(commands)
     _add_wins(commands)
     _add_folds(commands)
+    _add_errors(commands)
     _add_second_prior(commands)
     _add_site(commands)
     _add_compare(commands)

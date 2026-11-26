@@ -354,6 +354,47 @@ them that a peak season comes back down the year after, so the misses come from 
   playoffs included: one fold a season. Step 4 never reads these; check 151 and check 166 do.
 - **Code:** `src/openrapm/commands/within_season.py`, `data/within_folds.py`.
 
+## The ratings' standard errors (`rating_error.py`)
+
+- **For:** how far a rating would land from the one shown had the season's games come out as another draw of the same
+  schedule. No rating moves.
+- **Reads:** the held-back games with a tenth held back, `outputs/within/rd143_k10/`, and each season's published
+  step-4 multipliers; for the season in progress, its own set, `outputs/within/daily_k10/`.
+- **Writes:** `outputs/rating_errors_product.parquet`: player_id, season, se_off, se_def, se_total, repeats.
+- **How:** the delete-a-group jackknife over games. Each of a season's 30 folds is the season rated without a tenth of
+  its games, every input rebuilt from the games kept, then shrunk with the season's published multipliers. For each of
+  the three repeats, se^2 = 9/10 x the sum of squares of the ten ratings about their mean; the three are averaged. A
+  player whose every game fell in one fold has no rating there and that repeat is left out for him; with no complete
+  repeat he has no standard error.
+- **What it holds and leaves out:** it holds the games' noise in everything a rating reads from them, the box score,
+  Box Adj and the ridge. It leaves out how far the box-score prior can miss a player whatever games are played, so the
+  distance from a player's true value is larger.
+- **Sizes, 1997-2026:** a player with 1,500 or more offensive possessions reads about 0.55 on offense, 0.55 on defense
+  and 0.80 on the total; under 250 possessions the total reads 1.5. More of it comes from the prior's part than from
+  the games' part: 0.47 against 0.40 on offense, 0.49 against 0.30 on defense.
+- **The check:** the same jackknife on the quarter-held-back sets, four ratings a repeat, reads 6 to 8% smaller in
+  every era, because a rating from three quarters of the games leans more on its prior.
+- **The season in progress:** `openrapm folds --in-progress` rates it 30 more times as its build rates it, by that
+  build's own boosters (`openrapm build --save-models`): the boosters told the share of the regular season played, the
+  prior scales held and blended by it. The season so far rebuilt game by game sits within 0.16 of the published rows
+  (2026-11-26; the median 0.01), because the build reads the season's hustle counts from the league's season-to-date
+  dashboards and a fold can only sum the games it keeps; the command stops past 0.5.
+- **Commands:**
+
+  ```bash
+  python -m openrapm errors                                    # 1997-2026 from rd143_k10, 22 seconds
+  python -m openrapm folds --models daily --base season_ratings_product_step3 --seasons 2027 --tag daily_k10 \
+      --folds-per-repeat 10 --in-progress                      # 2 minutes on 2026-11-26
+  python -m openrapm errors --seasons 2027 --folds daily_k10
+  ```
+
+- **On the site:** `openrapm site --openrapm-decomposition` reads the file when it is beside the ratings table and
+  ends each row of `decompose_openrapm.json` with [offense, defense, total] and of `ratings_list.json` with the
+  total's; without the file the two are as before. The Ratings page shows the total's beside Total and, in Detail,
+  the shown side's beside its rating.
+- **Code:** `src/openrapm/rating_error.py`, `commands/errors.py`, `commands/within_season.py` (`in_progress_run`),
+  `commands/site.py`, `docs/index.html`.
+
 ## Wins over starter average (`wins.py`)
 
 - **For:** the owner's MVP score: how many regular-season wins a player added to his team over an average starter.
@@ -491,7 +532,10 @@ python -m openrapm data hustle-games 2027 2027       # not a step: a failure doe
 python -m openrapm data matchup-games 2027 2027      # not a step either
 python -m openrapm data dashboards 2027 2027 --force         # the season-to-date hustle the season in progress reads
 python -m openrapm data panel --force                        # also rebuilds the season's roles rows and bio feed
-python -m openrapm build --seasons 2027 --replace-seasons    # 2027 in place of yesterday's 2027, nothing else moves
+python -m openrapm build --seasons 2027 --replace-seasons --save-models daily    # 2027 in place of yesterday's
+python -m openrapm folds --models daily --base season_ratings_product_step3 --seasons 2027 --tag daily_k10 \
+    --folds-per-repeat 10 --in-progress              # not a step: 2027 rated 30 more times, for its standard errors
+python -m openrapm errors --seasons 2027 --folds daily_k10           # not a step either
 python -m openrapm site --openrapm-decomposition --power --power-forecast --out-dir A:/code/spmm_site/docs
 python -m openrapm data public-ratings               # not a step: the Bias page's three outside systems
 python -m openrapm site --bias --out-dir A:/code/spmm_site/docs      # not a step either
@@ -540,6 +584,7 @@ The model layer, `src/openrapm/`, is handed data and returns numbers:
 | `box_rates.py`, `on_court.py` | the padded box-score rates; a team's record with a player on and off |
 | `scoring.py` | how ratings are scored on games they never saw |
 | `wins.py` | WOSA |
+| `rating_error.py` | the ratings' standard errors |
 | `power_forecast.py` | the Power page's one rating |
 | `bias.py`, `consensus.py` | the Bias page; the consensus check |
 | `similarity.py`, `decomposition.py` | the Similarity page; the Detail view |
@@ -570,6 +615,7 @@ The commands, `src/openrapm/commands/`, join the two:
 | `commands/data.py` | `openrapm data` |
 | `commands/build.py` | `openrapm rate`, `shrink`, `swap` and `build` |
 | `commands/second_prior.py` | `openrapm second-prior` |
+| `commands/errors.py` | `openrapm errors` |
 | `commands/within_season.py` | `openrapm folds` |
 | `commands/wins.py` | `openrapm wins` |
 | `commands/site.py` | `openrapm site` |

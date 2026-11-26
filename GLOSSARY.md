@@ -134,6 +134,12 @@ played by a 0 player.
 **Prior part and games' part.** The two parts of a rating after step 3: the prior part s x prior (`prior_off`,
 `prior_def`), and the games' part r, also called u (`u_off`, `u_def`).
 
+**Standard error of a rating.** How far a rating would land from the one shown had the season's games come out as
+another draw of the same schedule (`rating_error.py`): the season is rated 30 more times, each without a tenth of its
+games, and the spread of those ratings is scaled up to a whole season's. A regular reads about 0.8 on his total. It
+holds the games' noise in the box score, Box Adj and the ridge; it leaves out how far the box-score prior can miss a
+player whatever games are played.
+
 **The shrink.** Step 4 (`prior_shrink.py`): each part of a rating multiplied by what holds up on held-back games, in
 two layers. Each part is split into the player's team mean and his deviation from it; the team means take four
 multipliers per season and the deviations four of their own, the prior's part and the games' part on offense and

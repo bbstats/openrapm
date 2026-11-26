@@ -25,6 +25,7 @@
 #      Similarity page's files, written again only on a morning when its player-seasons carry other ratings than the
 #      published ones (`openrapm site --similarity`).  Both are committed with the four files above on a morning they
 #      publish
+#   7. not a step either: the ratings' standard errors (`rating_errors` below), between the build and the site's files
 #
 # A morning that ends FAILED sends one line to the owner's phone (scripts/daily_notify.sh), and a second task at 8 AM
 # sends one when the morning never ran (scripts/daily_missed.sh).  The job holds a lock while it runs
@@ -101,6 +102,24 @@ similarity_files() {          # $1: the site folder written into; $2: the pool h
   /usr/bin/timeout 600 $PY -u -m openrapm site --similarity --out-dir "$1" >> "$LOG" 2>&1
 }
 
+# The ratings' standard errors (src/openrapm/rating_error.py) are never a step, so they can never hold the ratings
+# back.  The season is rated 30 more times, each with a tenth of its games held back, by the boosters the build has
+# just saved (`openrapm folds --in-progress`), and the spread of the 30 goes into outputs/rating_errors_product.parquet
+# in place of yesterday's rows (`openrapm errors`); the site step reads that file.  All of it waits for the file to
+# exist: `OPENRAPM_WRITE_PUBLISHED=1 openrapm errors` makes it, for the finished seasons, on the day the standard
+# errors are published, and until then the morning is what it was.  The folds took 2 minutes on 2026-11-26 and get 15;
+# a morning they fail keeps yesterday's standard errors beside today's ratings.
+ERRORS=$ROOT/outputs/rating_errors_product.parquet
+SAVE=""
+[ -f "$ERRORS" ] && SAVE="--save-models daily"
+rating_errors() {
+  say "start: folds --in-progress"
+  rm -rf "$ROOT/outputs/within/daily_k10"
+  /usr/bin/timeout 900 $PY -u -m openrapm folds --models daily --base season_ratings_product_step3 --seasons $SEASON --tag daily_k10 --folds-per-repeat 10 --in-progress >> "$LOG" 2>&1 || return 1
+  say "start: errors"
+  /usr/bin/timeout 300 $PY -u -m openrapm errors --seasons $SEASON --folds daily_k10 >> "$LOG" 2>&1
+}
+
 # One run at a time.  A dry run that finds another at work stops at once and leaves every record alone; the morning
 # waits up to half an hour for a build typed by hand to give the lock back.
 if ! take_lock "the morning job, process $$"; then
@@ -151,7 +170,10 @@ say "start: matchup-games"
 $PY -u -m openrapm data matchup-games $SEASON $SEASON >> "$LOG" 2>&1 || say "matchup games: some failed, asked again tomorrow"
 step $PY -u -m openrapm data dashboards $SEASON $SEASON --force
 step $PY -u -m openrapm data panel --force
-step $PY -u -m openrapm build --seasons $SEASON --replace-seasons
+step $PY -u -m openrapm build --seasons $SEASON --replace-seasons $SAVE
+if [ -f "$ERRORS" ]; then
+  rating_errors || NOTE="$NOTE; standard errors: not written, yesterday's stay"
+fi
 
 # ratings_list.json is written with decompose_openrapm.json, cut from it: the ratings page's list (commands/site.py)
 FILES="docs/data/ratings.json docs/data/decompose_openrapm.json docs/data/ratings_list.json docs/data/power.json"

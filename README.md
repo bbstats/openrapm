@@ -40,7 +40,8 @@ flowchart TD
     OUT --> SITE["docs/data/<br/>openrapm site"]
 ```
 
-Read from the finished ratings, not part of them: WOSA, wins over starter average (`wins.py`); the Power page
+Read from the finished ratings, not part of them: each rating's standard error (`rating_error.py`); WOSA, wins
+over starter average (`wins.py`); the Power page
 (`power_forecast.py`); the Bias page (`bias.py`); the Similarity page (`similarity.py`); the Detail view, which splits
 each rating into its parts (`decomposition.py`). `PIPELINE.md` gives each part's inputs, outputs, command, settings
 and code; `GLOSSARY.md` defines every term.
@@ -180,6 +181,7 @@ python -m openrapm folds --models mine --base season_ratings_mine_step3 --season
 python -m openrapm folds --models mine --base season_ratings_mine_step3 --seasons 1997-2026 --tag mine_k10 --folds-per-repeat 10 --jobs 4
 # 4. the published tables and the site's files
 python -m openrapm build --second-prior mine_line --folds mine_early,mine_within --extrapolate-folds mine_k10
+python -m openrapm errors                             # every rating's standard error, from the tenth-held-back sets
 python -m openrapm site --openrapm-decomposition --similarity --power --bias
 ```
 
@@ -218,6 +220,7 @@ runs what GitHub runs, on a clone with no data: the lint check, every test and t
       on_court.py       a team's record with a player on and off the court
       scoring.py        how ratings are scored on games they never saw
       wins.py           WOSA: the win model, leverage, the pace ridge, the bar, the wins
+      rating_error.py   a rating's standard error: the jackknife over the sets that hold back a tenth of the games
       power_forecast.py the Power page's one rating
       bias.py           the Bias page: OpenRAPM against a consensus of outside systems, stat by stat
       similarity.py     the Similarity page: each player-season's nearest player-seasons

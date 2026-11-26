@@ -93,22 +93,23 @@ from ..data.panel import (
     SeasonSources,
     SeasonTables,
     fit_designs,
+    in_progress_panel,
     season_panel,
     season_to_date,
     share_cap,
     trainable_panel,
 )
 from ..data.roles import player_season_inputs, roles_path
-from ..data.seasons import trainable, trainable_through
+from ..data.seasons import share_played, trainable, trainable_through
 from ..data.second_prior_files import line_setup, load_grams
 from ..data.shots import DEFENSE_TARGETS, OPPONENT_THREE_LUCK_KEPT, expected_threes
 from ..data.tables import team_of_rows
 from ..data.within_folds import OUTSIDE
 from ..features import CLOSENESS, OFF_COURT, ON_MINUS_OFF, PANEL_KEYS, PRIOR_FEATURES, add_features
 from ..scoring import Ratings, armse, predict_season, score
-from ..settings import ROW_LABELS, TEST, UNSHRINK_LABELS, Targets
+from ..settings import PRODUCT, ROW_LABELS, TEST, UNSHRINK_LABELS, Targets
 from . import parallel
-from .build import season_lineup_rows
+from .build import held_scales, season_lineup_rows
 
 SIDES = ("O", "D")
 REPEATS = 3                 # the repeats of a season's assignment, as step 4's folds are built (`--repeats`)
@@ -118,6 +119,12 @@ SCORE_TARGET = "pts"                                        # the test games are
 # possessions
 FILL = (500.0, 0.25)
 REPRODUCE_TOLERANCE = 1e-6
+# --in-progress: how far the season so far rebuilt game by game may sit from the published rows, in points per 100.
+# The build reads the season in progress's hustle counts from the league's season-to-date dashboards, because a game's
+# hustle box score fills in over the days after it (data/panel.season_panel), and a fold can only sum the games it
+# keeps; a game still waited on (config.yaml, no_stints_accepted) has box scores and no lineups.  On 2026-11-26 the
+# largest gap was 0.16 and the median 0.01.  A larger one is a rebuild that is not the build's
+IN_PROGRESS_TOLERANCE = 0.5
 # the boosters were saved by a test-setting build; the ridge and the targets are the same in both settings
 SETTINGS = TEST
 # every design a season world rebuilds from its fit games: the points as scored, the panel's two (data/panel.py) and
@@ -183,14 +190,16 @@ def load_models(outputs: Path, models: str, seasons=None) -> dict:
     return saved
 
 
-def check_models(meta: dict) -> None:
-    """Refuse boosters that were not saved by a test-setting build of the shipped steps.
+def check_models(meta: dict, neighbours: int = 1) -> None:
+    """Refuse boosters that were not saved by a test-setting build of the shipped steps.  With `neighbours` 0, by a
+    product-setting build instead: the season in progress's own boosters (--in-progress), which step 4 never reads.
 
     `crossfit` "scale" is the earlier builds' cross-fitted scale: its fold priors equalled the full prior value
     for value (checked 2026-10-09), so the full-season fit here reproduces it.  "honest" rebuilt every input per
     cross-fitting fold, which this command does not.
     """
-    wrong = {key: (meta.get(key), value) for key, value in EXPECTED_META.items() if meta.get(key) != value}
+    expected = {**EXPECTED_META, "exclude_neighbours": neighbours}
+    wrong = {key: (meta.get(key), value) for key, value in expected.items() if meta.get(key) != value}
     if meta.get("chunk_label") not in ROW_LABELS:
         wrong["chunk_label"] = (meta.get("chunk_label"), ROW_LABELS)
     if meta.get("unshrink") not in UNSHRINK_ALLOWED:
@@ -201,11 +210,13 @@ def check_models(meta: dict) -> None:
     if meta.get("crossfit") != "scale":
         wrong["crossfit"] = (meta.get("crossfit"), "scale")
     if wrong:
-        raise SystemExit(f"the saved models were not built at the shipped test settings: {wrong}")
+        setting = "test" if neighbours else "product"
+        raise SystemExit(f"the saved models were not built at the shipped {setting} settings: {wrong}")
 
 
-def season_models(saved_all: dict, season: int) -> dict:
-    """{"O", "D"}: the season's saved boosters, after checking they never trained on it or a neighbor."""
+def season_models(saved_all: dict, season: int, neighbours: int = 1) -> dict:
+    """{"O", "D"}: the season's saved boosters, after checking they never trained on it or a neighbor; with
+    `neighbours` 0, on it alone (--in-progress)."""
     if season not in saved_all:
         raise SystemExit(f"no saved models for {season}")
     saved = saved_all[season]
@@ -216,7 +227,7 @@ def season_models(saved_all: dict, season: int) -> dict:
             raise SystemExit(f"{season} {side}: the boosters average several fold groupings, which `predict` "
                              "does not; save them with one grouping")
     unseen = set(saved["O"]["unseen"]) & set(saved["D"]["unseen"])
-    if not {season - 1, season, season + 1} <= unseen:
+    if not set(range(season - neighbours, season + neighbours + 1)) <= unseen:
         raise SystemExit(f"{season}: the boosters trained on the season or a neighbour (unseen {sorted(unseen)})")
     return saved
 
@@ -514,9 +525,11 @@ def _panel_differences(world: SeasonWorld, panel: pd.DataFrame) -> tuple[dict, i
              for column in columns if pd.api.types.is_numeric_dtype(both[column])}, int(len(stored)))
 
 
-def reproduce(rated: RatedWorld, base: pd.DataFrame, panel: pd.DataFrame, saved: dict) -> dict:
+def reproduce(rated: RatedWorld, base: pd.DataFrame, panel: pd.DataFrame, saved: dict,
+              tolerance: float = REPRODUCE_TOLERANCE) -> dict:
     """The whole-season world against the base table's rows for the season, its boosters' answers against the
-    priors the build saved, and its rebuilt inputs against the stored season panel."""
+    priors the build saved, and its rebuilt inputs against the stored season panel.  It passes when every rating is
+    within `tolerance` of the base table's."""
     world, mine = rated.world, rated.table
     theirs = base[base.season == world.season]
     joined = mine.merge(theirs[["player_id", "offense", "defense", "prior_offense", "prior_defense"]],
@@ -542,7 +555,7 @@ def reproduce(rated: RatedWorld, base: pd.DataFrame, panel: pd.DataFrame, saved:
     out["world_checks"] = {key: (bool(value) if isinstance(value, (bool, np.bool_)) else value)
                            for key, value in world.checks.items()}
     out["passed"] = bool(len(joined) == len(theirs) == len(mine)
-                         and max(out["max_diff_offense"], out["max_diff_defense"]) < REPRODUCE_TOLERANCE
+                         and max(out["max_diff_offense"], out["max_diff_defense"]) < tolerance
                          and not failed_checks(world.checks))
     return out
 
@@ -575,6 +588,10 @@ class SeasonRun:
     held_scale: tuple | None = None  # --hold-prior-scale: (s_O, s_D) every fold's ridge holds, the whole season never
     held_weight: float = 0.0     # --blend-through: the share of the way from those to the fold's own fitted scales
     least_share: float = 1.0     # the smallest part-season share its boosters trained on (`least_share_of`)
+    # --in-progress: the share of its regular season the season in progress has played (data.seasons.share_played).
+    # Every rating of it, the whole season so far and each fold, is then made as the build makes it: the boosters told
+    # this share, the prior scales held and blended by it (commands/build.rate_one_season)
+    in_progress_share: float | None = None
 
     def __post_init__(self) -> None:
         # a season so far rated by boosters trained with part-season rows must know the least share those rows cover,
@@ -593,6 +610,8 @@ class SeasonRun:
         """The share of a season the boosters are told the fit games cover: the season so far's share for boosters
         trained with part-season rows, never under the least their training rows cover (`least_share`, as the build
         holds the season in progress's rows, box_prior.rated_rows; 2026-11-01), 1 otherwise and for the whole season."""
+        if self.in_progress_share is not None:
+            return max(float(self.in_progress_share), float(self.least_share))
         whole = {str(game) for game in fit_ids} == set(self.game_ids)
         if whole or self.cut is None or not self.part_season_rows:
             return 1.0
@@ -629,8 +648,9 @@ class SeasonRun:
             context = ContextInputs(self.line, stints, self.context_panel, self.line_folds, self.line_team_totals,
                                     self.line_type_scale, self.line_input_set)
         whole = {str(game) for game in fit_ids} == set(self.game_ids)
+        held = self.held_scale if self.in_progress_share is not None or not whole else None
         return rate_world(world, self.saved, self.prior_panel, context, self.settings, self.prior_share(fit_ids),
-                          None if whole else self.held_scale, held_weight=self.held_weight)
+                          held, held_weight=self.held_weight)
 
     @property
     def prior_inputs(self) -> str:
@@ -650,7 +670,8 @@ def run_reproduction(run: SeasonRun, base: pd.DataFrame, panel: pd.DataFrame, st
     """The season rebuilt from all of its games, held to the base table; stops the run if it does not match."""
     path = run.out_dir / f"reproduce_{run.season}.json"
     rated = run.rate(set(run.game_ids))
-    result = reproduce(rated, base, panel, run.saved)
+    tolerance = REPRODUCE_TOLERANCE if run.in_progress_share is None else IN_PROGRESS_TOLERANCE
+    result = reproduce(rated, base, panel, run.saved, tolerance)
     path.write_text(json.dumps(result, indent=1), encoding="utf-8")
     player_table(rated).assign(season=run.season, repeat=-1, fold=-1).to_parquet(
         run.out_dir / f"players_{run.season}_all.parquet", index=False)
@@ -697,8 +718,9 @@ def fold_checks(run: SeasonRun, rated: RatedWorld, test_checks: dict, fit_ids: s
     checks["folds: fit and test games disjoint"] = not (fit_ids & test_ids)
     checks["folds: fit and test games cover the season"] = (fit_ids | test_ids) == (
         set(run.game_ids) if universe is None else universe)
-    checks["prior models: never trained on this season or its neighbours"] = (
-        {run.season - 1, run.season, run.season + 1} <= unseen)
+    # a season in progress is rated by its own build's boosters, which leave out the season alone (--in-progress)
+    near = {run.season} if run.in_progress_share is not None else {run.season - 1, run.season, run.season + 1}
+    checks["prior models: never trained on this season or its neighbours"] = near <= unseen
     return checks
 
 
@@ -905,9 +927,12 @@ def fold_lines(cfg: dict, meta: dict, whole_season_context: bool) -> FoldLines |
                      set(trainable(cfg).seasons), half_life)
 
 
-def attach_line(run: SeasonRun, lines: FoldLines, whole_season_context: bool) -> None:
-    """The season's second-prior line and the stint rows its context numbers read, on `run`."""
-    run.line = second_prior.season_coefficients(lines.grams, run.season, lines.trainable, SETTINGS.exclude_neighbours,
+def attach_line(run: SeasonRun, lines: FoldLines, whole_season_context: bool,
+                neighbours: int | None = None) -> None:
+    """The season's second-prior line and the stint rows its context numbers read, on `run`.  `neighbours`: how many
+    seasons either side of it the line leaves out, the test setting's unless given (0 with --in-progress)."""
+    neighbours = SETTINGS.exclude_neighbours if neighbours is None else neighbours
+    run.line = second_prior.season_coefficients(lines.grams, run.season, lines.trainable, neighbours,
                                                 lines.folds, lines.penalty, lines.nearest, lines.half_life)
     run.line_folds, run.line_team_totals, run.line_type_scale = lines.folds, lines.team_totals, lines.type_scale
     run.line_input_set = lines.input_set
@@ -964,6 +989,40 @@ def blend_run(run: "SeasonRun", blend_through: float | None, blend_from: float =
           f"{run.season_share:.1%} of the season played", flush=True)
 
 
+def fold_scope(cfg: dict, seasons, in_progress: bool, other_designs: tuple) -> tuple[int, pd.DataFrame]:
+    """(how many seasons either side of a season its boosters and its line must have left out, the stored season panel
+    its rebuilt inputs are held against): the test setting's and the finished seasons' panel, or with --in-progress 0
+    and the seasons in progress' panel, after checking the seasons are in progress and none of `other_designs`
+    (--cut, --so-far, --hold-prior-scale) was asked for."""
+    if not in_progress:
+        return SETTINGS.exclude_neighbours, trainable_panel(cfg)
+    if any(option is not None for option in other_designs):
+        raise SystemExit("--in-progress rates the season so far as the build does; it takes no --cut, --so-far or "
+                         "--hold-prior-scale")
+    if any(int(season) <= trainable_through(cfg) for season in seasons):
+        raise SystemExit(f"--in-progress is for seasons past {trainable_through(cfg)}, the last finished one")
+    return 0, in_progress_panel(cfg)
+
+
+def in_progress_run(run: "SeasonRun", cfg: dict, in_progress: bool = True) -> None:
+    """--in-progress: `run` rates its season as the build rates a season in progress (commands/build.py,
+    SeasonsInProgress and rate_one_season), said once: the boosters told the share of the regular season played, and
+    short of settings.RidgeSettings.held_scale_through the prior scales held at the mean of the 8 finished seasons
+    nearest it in the published step-3 table, blended toward each fit's own by that share.  Without `in_progress`,
+    nothing."""
+    if not in_progress:
+        return
+    ridge = PRODUCT.ridge
+    share = share_played(run.season, cfg)
+    run.in_progress_share = share
+    if share < ridge.held_scale_through:
+        run.held_scale = held_scales(cfg, ridge.held_scale_table, run.season)
+        if run.held_scale is not None and ridge.held_scale_blend:
+            run.held_weight = prior_rapm.blend_weight(share, ridge.held_scale_through, ridge.held_scale_blend_from)
+    print(f"  {run.season} is in progress, {share:.1%} of its regular season played: every fold rated as the build "
+          f"rates it, the prior scales {run.held_weight:.0%} of the way from held to each fit's own", flush=True)
+
+
 def boosters_identity(outputs: Path, models: str) -> dict | None:
     """The saved boosters a fold folder is built from: outputs/prior_models_<models>.pkl's name, size and modified
     time; None when the file is not there under that name."""
@@ -1008,7 +1067,7 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
               pieces: bool = False, whole_season_inputs: bool = False, whole_season_context: bool = False,
               n_folds: int = N_FOLDS, repeats: int = REPEATS, cut: float | None = None,
               so_far: float | None = None, hold_prior_scale: str | None = None,
-              blend_through: float | None = None, blend_from: float = 0.0) -> int:
+              blend_through: float | None = None, blend_from: float = 0.0, in_progress: bool = False) -> int:
     """`openrapm folds`: the reproduction check and the folds of every season, then the gathered files.  With
     `pieces`, each fold also writes its pieces_<stem>.parquet (`fold_pieces`); with `whole_season_inputs`, every
     fold's boosters read the whole season's inputs (the leak control, the module docstring); with
@@ -1019,7 +1078,13 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
     design (the module docstring).  With `hold_prior_scale`, a table under outputs/, every fold's ridge holds the
     prior scales at the mean of that table's 8 seasons nearest its season (prior_rapm.held_prior_scale, experiment
     109); the whole season, the reproduction, is fitted as shipped.  With `blend_through` too, the scales go a straight
-    line from held at a season's first game to its fit's own at that share (prior_rapm.blend_weight)."""
+    line from held at a season's first game to its fit's own at that share (prior_rapm.blend_weight).
+
+    With `in_progress`, the seasons are seasons in progress and `models` their own boosters, saved by the build that
+    rated them (`openrapm build --save-models`, the product setting): the whole season so far and every fold are
+    rated as that build rates the season (`in_progress_run`), so the whole-season rebuild must give back the published
+    rows.  Step 4 never reads these folds; the ratings' standard errors do (commands/errors.py)."""
+    neighbours, panel = fold_scope(cfg, seasons, in_progress, (cut, so_far, hold_prior_scale))
     if cut is not None and so_far is not None:
         raise SystemExit("--cut and --so-far are two fold designs; ask for one")
     split = "date" if cut is not None else "so_far" if so_far is not None else "random"
@@ -1034,14 +1099,13 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
     check_fold_boosters(out_dir, boosters_identity(outputs, models))
     saved_all = load_models(outputs, models, seasons)
     meta = saved_all.get("meta", {})
-    check_models(meta)
+    check_models(meta, neighbours)
     settings = fold_settings(meta)
     part_season_rows = trained_on_part_seasons(meta)
     if split == "date":
         n_folds, repeats = 1, 1
     base_table = pd.read_parquet(outputs / f"{base}.parquet")
     base_written = (outputs / f"{base}.parquet").stat().st_mtime
-    panel = trainable_panel(cfg)
     roles = pd.read_parquet(roles_path(cfg))
     inputs = player_season_inputs(roles, cap=share_cap(cfg))
     debut = careers_before(cfg, roles)            # the seasons before 1997, as the season panel read them
@@ -1058,17 +1122,18 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
     lines = fold_lines(cfg, meta, whole_season_context)
     started = time.time()
     for season in seasons:
-        saved = season_models(saved_all, season)
+        saved = season_models(saved_all, season, neighbours)
         full = {target: designs.season(season, target) for target in world_targets(settings)}
         run = SeasonRun(season, cfg, full, SeasonSources(SeasonTables(season, cfg), roles, inputs, debut), saved,
                         out_dir, box_files, settings=settings, n_folds=n_folds, repeats=repeats, cut=cut,
                         split=split, part_season_rows=part_season_rows, least_share=least_share_of(meta),
                         held_scale=season_held_scale(scales, season))
         blend_run(run, blend_through, blend_from)
+        in_progress_run(run, cfg, in_progress)
         if whole_season_inputs:
             run.prior_panel = run.world(set(run.game_ids)).panel
         if lines is not None:
-            attach_line(run, lines, whole_season_context)
+            attach_line(run, lines, whole_season_context, neighbours)
         run_season(run, base_table, panel, reproduce_only, started, base_written)
         designs.clear()
     gather(out_dir)

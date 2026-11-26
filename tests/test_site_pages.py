@@ -120,14 +120,18 @@ def test_the_committed_list_file_carries_the_detail_files_ratings():
     if not listed.exists() or not detail.exists():
         pytest.skip("the ratings page's files are not built")
     listed, detail = (json.loads(path.read_text(encoding="utf-8")) for path in (listed, detail))
-    assert listed["meta"]["fields"] == ["n", "id", "p", "tm", "o", "d", "t", "w"]
+    # with the ratings' standard errors written (openrapm errors), both files' rows end with them: the Detail file's
+    # with [offense, defense, total], the list's with the total's
+    errors = "se" in detail["meta"]["fields"]
+    assert listed["meta"]["fields"] == ["n", "id", "p", "tm", "o", "d", "t", "w"] + (["se"] if errors else [])
     for key in ("seasons", "default_season", "percentile_min", "rookies"):
         assert listed["meta"][key] == detail["meta"][key], key
     at = {name: detail["meta"]["fields"].index(name) for name in listed["meta"]["fields"]}
     assert list(listed["rows"]) == list(detail["rows"])
     for season, rows in detail["rows"].items():
         cut = [[row[at["n"]], row[at["id"]], row[at["p"]], row[at["tm"]], row[at["o"]][-1], row[at["d"]][-1],
-                row[at["t"]][-1], row[at["w"]]] for row in rows]
+                row[at["t"]][-1], row[at["w"]],
+                *([None if row[at["se"]] is None else row[at["se"]][-1]] if errors else [])] for row in rows]
         assert listed["rows"][season] == cut, season
     in_progress = listed["meta"]["through"]
     assert all(re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) for day in in_progress.values())

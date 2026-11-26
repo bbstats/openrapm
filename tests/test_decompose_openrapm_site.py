@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from openrapm.commands.site import OPENRAPM_FIELDS, OPENRAPM_PIECES, WOSA_PARTS
+from openrapm.commands.site import ERRORS_FIELD, OPENRAPM_FIELDS, OPENRAPM_PIECES, WOSA_PARTS
 
 DATA = Path(__file__).resolve().parents[1] / "docs" / "data"
 ROUNDING = 0.031          # six numbers at two decimals, the five pieces and the rating, each off by up to 0.005
@@ -26,7 +26,9 @@ def decomposition():
 
 def test_the_file_holds_every_season_latest_first_with_the_published_field_names(decomposition):
     meta = decomposition["meta"]
-    assert meta["fields"] == OPENRAPM_FIELDS and meta["pieces"] == OPENRAPM_PIECES
+    # with the ratings' standard errors written (openrapm errors), one more field at the end of every row
+    assert meta["fields"] in (OPENRAPM_FIELDS, OPENRAPM_FIELDS + [ERRORS_FIELD])
+    assert meta["pieces"] == OPENRAPM_PIECES
     assert meta["wosa_parts"] == WOSA_PARTS
     assert meta["seasons"] == sorted(meta["seasons"], reverse=True)
     assert list(decomposition["rows"]) == [str(season) for season in meta["seasons"]]

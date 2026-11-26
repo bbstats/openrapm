@@ -73,6 +73,7 @@ MODEL_LAYER = [
     "decomposition.py",  # the decomposition pages: which rows of a ridge fit a coefficient comes from
     "wins.py",          # wins over starter average: the win model, leverage, the pace ridge, the bar, the wins
     "power_forecast.py",  # the Power page's one rating: the last-10 stats, the weights at a point of the season
+    "rating_error.py",  # a rating's standard error: the jackknife over the folds that hold back a tenth of the games
 ]
 
 # Model code that still reaches its own data, and what through.  Nothing may be added here.

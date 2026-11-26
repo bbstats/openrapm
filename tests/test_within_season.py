@@ -332,3 +332,14 @@ def test_a_saved_model_file_of_a_game_by_game_build_is_refused_by_name(tmp_path)
         ws.load_models(tmp_path, "net1")
     pd.to_pickle({"meta": {"settings": asdict(TEST)}}, tmp_path / "prior_models_today.pkl")
     assert ws.load_models(tmp_path, "today")["meta"]["settings"]["prior"]["second_prior"] == TEST.prior.second_prior
+
+
+def test_a_season_in_progress_is_folded_with_its_own_builds_boosters():
+    """`openrapm folds --in-progress`: the boosters of the build that rated the season, the product setting's, which
+    leave out the season alone; the test setting's are then the ones refused."""
+    ws.check_models({**LEGACY_META, "exclude_neighbours": 0}, neighbours=0)
+    with pytest.raises(SystemExit, match="shipped product settings"):
+        ws.check_models(LEGACY_META, neighbours=0)
+    assert ws.season_models(_saved(unseen=(2026,)), 2026, neighbours=0)["O"]["unseen"] == [2026]
+    with pytest.raises(SystemExit, match="trained on"):
+        ws.season_models(_saved(unseen=(2025, 2027)), 2026, neighbours=0)

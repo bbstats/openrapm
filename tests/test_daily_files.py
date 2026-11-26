@@ -88,6 +88,23 @@ def test_the_bias_file_can_never_hold_the_ratings_back():
     assert 'step git -C "$SITE" add -- $ADD' in lines
 
 
+def test_the_standard_errors_can_never_hold_the_ratings_back():
+    """The ratings' standard errors rate the season 30 more times.  Neither of their two calls is a step, each is
+    capped, and both wait for the errors file `openrapm errors` makes on the day they are published; the build keeps
+    its boosters for them only then."""
+    text = (SCRIPT.parent / "daily_update.sh").read_text(encoding="utf-8")
+    lines = [line.strip() for line in text.splitlines() if not line.strip().startswith("#")]
+    calls = [line for line in lines if "$PY" in line and ("openrapm folds" in line or "openrapm errors" in line)]
+    assert len(calls) == 2 and all(line.startswith("/usr/bin/timeout ") for line in calls)
+    assert "--in-progress" in calls[0] and "--folds-per-repeat 10" in calls[0] and "--tag daily_k10" in calls[0]
+    assert "--folds daily_k10" in calls[1]
+    assert 'ERRORS=$ROOT/outputs/rating_errors_product.parquet' in lines
+    assert '[ -f "$ERRORS" ] && SAVE="--save-models daily"' in lines
+    build = lines.index("step $PY -u -m openrapm build --seasons $SEASON --replace-seasons $SAVE")
+    assert lines[build + 1] == 'if [ -f "$ERRORS" ]; then' and lines[build + 2].startswith("rating_errors || NOTE=")
+    assert 'rm -rf "$ROOT/outputs/within/daily_k10"' in lines           # yesterday's folds are other games' folds
+
+
 def _job_lines() -> list:
     text = (SCRIPT.parent / "daily_update.sh").read_text(encoding="utf-8")
     return [line.strip() for line in text.splitlines() if not line.strip().startswith("#")]

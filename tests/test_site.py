@@ -638,3 +638,52 @@ def test_power_ratings_weigh_each_rating_by_its_share_of_the_last_games_with_blo
     assert sum(row[2] / 100 * row[3] for row in home["players"]) == pytest.approx(home["o"], abs=0.03)
     away = next(team for team in document["teams"] if team["tm"] == "AWY")
     assert away["o"] == pytest.approx(round(-plain / 2, 2)) and away["players"][0][3] == round(-plain / 2 / 5, 2)
+
+
+def test_the_rows_end_with_their_standard_errors_when_the_errors_are_handed_in():
+    """rating_error.py's standard errors, one more field: [offense, defense, total] at two decimals, None for a
+    player without them; without errors a row is as it was."""
+    rows = pd.DataFrame({"poss_season": [1000.0, 500.0, 400.0], "wosa": [4.0, -1.0, 0.0], "wosa_off": [4.0, -1.0, 0.0],
+                         "wosa_def": [0.0, 0.0, 0.0], "minutes_rs": [2000.0, 999.0, 800.0],
+                         "above_off": [5.0, -1.0, 0.0], "above_def": [1.0, -0.5, 0.0], "leverage": [1.0, 0.9, 1.0],
+                         "leverage_off": [1.0, 0.9, 1.0], "leverage_def": [1.0, 0.9, 1.0]})
+    columns = {f"{side}_{piece}": [0.1, 0.2, 0.3] for side in site.OPENRAPM_SIDES for piece in site.OPENRAPM_PIECES}
+    columns["total_rating"] = [3.0, 2.0, 1.0]
+    pieces = pd.DataFrame({"player_id": [1, 2, 3], **columns})
+    names = np.array(["A", "B", "C"], dtype=object)
+    errors = {1: (0.674, 0.696, 0.931), 3: (0.5, float("nan"), 0.9)}
+    got = site.openrapm_rows(rows, pieces, names, errors=errors)
+    assert [row[-1] for row in got] == [[0.67, 0.7, 0.93], None, None]
+    plain = site.openrapm_rows(rows, pieces, names)
+    assert [row[:-1] for row in got] == plain and len(plain[0]) == len(site.OPENRAPM_FIELDS)
+
+
+def test_the_list_file_carries_the_totals_standard_error_when_the_detail_file_has_them():
+    row = ["Victor Wembanyama", 1641705, 620, [3.9, 0.3, 0.2, 0.0, 0.66, 5.06], [3.9, -0.3, 0.6, 0.0, 0.07, 4.27],
+           [7.8, 0.0, 0.8, 0.0, 0.73, 9.33], "SAS", 1.9, 500, [4.0, 1.0, 1.0], [4.0, 1.0, 0.9], [8.0, 1.0, 1.9]]
+    detail = {"meta": {"built": "2026-11-26", "seasons": [2027], "default_season": 2027, "percentile_min": {},
+                       "rookies": {"2027": []}, "fields": site.OPENRAPM_FIELDS + [site.ERRORS_FIELD],
+                       "pieces": site.OPENRAPM_PIECES},
+              "rows": {"2027": [row + [[0.67, 0.7, 0.93]], row + [None]]}}
+    listed = site.ratings_list_document(detail)
+    assert listed["meta"]["fields"] == site.RATINGS_LIST_FIELDS + ["se"]
+    assert [r[-1] for r in listed["rows"]["2027"]] == [0.93, None]
+    assert listed["rows"]["2027"][0][:-1] == ["Victor Wembanyama", 1641705, 620, "SAS", 5.06, 4.27, 9.33, 1.9]
+
+
+def test_the_site_reads_the_standard_errors_written_beside_the_ratings_table(openrapm_site):
+    """`openrapm errors` writes rating_errors_<name>.parquet beside season_ratings_<name>.parquet; with it there the
+    two files carry the field, and without it they are as before."""
+    ratings, final, _, data = openrapm_site
+    assert site.errors_path(ratings.with_name("season_ratings_product.parquet")).name == "rating_errors_product.parquet"
+    assert site.rating_errors(ratings) is None
+    first = int(final.player_id.iloc[0])
+    pd.DataFrame({"player_id": [first], "season": [2002], "se_off": [0.5], "se_def": [0.4], "se_total": [0.7],
+                  "repeats": [3]}).to_parquet(site.errors_path(ratings))
+    site.run_site({}, ratings=ratings, out_dir=data.parent, built="2026-11-26", openrapm_decomposition=True)
+    detail = json.loads((data / site.OPENRAPM_FILE).read_text(encoding="utf-8"))
+    listed = json.loads((data / site.RATINGS_LIST_FILE).read_text(encoding="utf-8"))
+    assert detail["meta"]["fields"] == site.OPENRAPM_FIELDS + ["se"]
+    by_id = {row[1]: row[-1] for row in detail["rows"]["2002"]}
+    assert by_id.pop(first) == [0.5, 0.4, 0.7] and set(by_id.values()) == {None}
+    assert {row[1]: row[-1] for row in listed["rows"]["2002"]}[first] == 0.7

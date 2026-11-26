@@ -169,12 +169,19 @@
   const WOSA_COLS = [["wl", "Leverage"], ["ws", "WOSA"]];
   // the columns of each view, [key, header]: the ratings view shows each side's rating, the detail one
   // side's pieces and its WOSA's inputs
-  const COLUMNS = { ratings: [["o", "Offense"], ["d", "Defense"], ["t", "Total"], ["w", "WOSA"], ["p", "Poss."]],
-                    detail: [...PIECES, ["a", "OpenRAPM"], ["p", "Poss."], ...WOSA_COLS] };
+  // se is the total's standard error and sa the shown side's (meta.fields has "se" once openrapm errors has run);
+  // without them in the file the two columns are left out
+  const COLUMNS = { ratings: [["o", "Offense"], ["d", "Defense"], ["t", "Total"], ["se", "\u00b1"], ["w", "WOSA"], ["p", "Poss."]],
+                    detail: [...PIECES, ["a", "OpenRAPM"], ["sa", "\u00b1"], ["p", "Poss."], ...WOSA_COLS] };
+  const ERROR_KEYS = ["se", "sa"];
+  const SIDE_ERROR = { off: 0, def: 1, total: 2 };
+  const columns = () => COLUMNS[state.view].filter(([key]) => data && data.errors || !ERROR_KEYS.includes(key));
   // each column header's hover text
   const TIPS = { o: "Points per 100 possessions added on offense, vs. an average player",
                  d: "Points per 100 possessions saved on defense, vs. an average player",
                  t: "Offense plus defense, points per 100 possessions",
+                 se: "Standard error of Total",
+                 sa: "Standard error of OpenRAPM",
                  w: "Wins over starter average: wins added over the average of the 150 most-started players, regular season only",
                  p: "Offensive possessions played, regular season and playoffs",
                  box: "Rating predicted from the box score alone",
@@ -225,7 +232,7 @@
   };
   async function load() {
     const doc = await (await fetch("data/ratings_list.json")).json();
-    return { meta: doc.meta, rows: rowsOf(doc) };
+    return { meta: doc.meta, rows: rowsOf(doc), errors: doc.meta.fields.includes("se") };
   }
   // a Detail row keeps the list row's shape, o, d and t its three ratings, with the file's own arrays under x
   let detailed = null;                                // the Detail file's promise, once it has been asked for
@@ -233,10 +240,11 @@
     if (!detailed) detailed = fetch("data/decompose_openrapm.json").then(r => r.json()).then(doc => {
       const rows = rowsOf(doc);
       for (const list of Object.values(rows)) for (const r of list) {
-        r.x = { o: r.o, d: r.d, t: r.t, wo: r.wo, wd: r.wd, wt: r.wt };
+        r.x = { o: r.o, d: r.d, t: r.t, wo: r.wo, wd: r.wd, wt: r.wt, se: r.se || null };
         r.o = r.x.o[5]; r.d = r.x.d[5]; r.t = r.x.t[5];
+        r.se = r.x.se ? r.x.se[2] : null;
       }
-      data = { meta: Object.assign({}, doc.meta, data.meta), rows, detail: true };
+      data = { meta: Object.assign({}, doc.meta, data.meta), rows, detail: true, errors: doc.meta.fields.includes("se") };
       careers = careersOf(data);
       poolCache.clear(); pctCache.clear();
     }).catch(e => { detailed = null; throw e; });
@@ -255,9 +263,11 @@
 
   // one player's row as the table reads it: each side's rating, and the chosen side's five pieces and rating
   function onSide(r, side) {
-    const row = { n: r.n, id: r.id, p: r.p, tm: r.tm, w: r.w, o: r.o, d: r.d, t: r.t, rt: r.t };
+    const row = { n: r.n, id: r.id, p: r.p, tm: r.tm, w: r.w, o: r.o, d: r.d, t: r.t, rt: r.t,
+                  se: r.se === undefined ? null : r.se, sa: null };
     if (!r.x) return row;                             // a row of the list file: the ratings alone
     const v = r.x[SIDE_FIELD[side]], x = r.x[WOSA_SIDE[side]];
+    if (r.x.se) row.sa = r.x.se[SIDE_ERROR[side]];
     return Object.assign(row, { box: v[0], adj: v[4], on: v[1], off: v[2], sos: v[3], a: v[5], wl: x[1], ws: x[2] });
   }
 
@@ -367,6 +377,7 @@
   function setView(view, side = (view === "detail" && FIELD_SIDE[sorting().k]) || state.side) {
     for (const s of Object.values(state.sort))
       if (view === "ratings" ? s.k === "ws" : s.k === "w") s.k = view === "ratings" ? "w" : "ws";
+      else if (view === "ratings" ? s.k === "sa" : s.k === "se") s.k = view === "ratings" ? "se" : "sa";
       else if (view === "ratings" ? s.k !== "p" && s.k !== "s" : FIELD_SIDE[s.k]) s.k = view === "ratings" ? SIDE_FIELD[side] : "a";
     state.view = view;
     state.side = side;
@@ -380,7 +391,7 @@
     const th = (key, name, cls) => `<th${cls ? ` class="${cls}"` : ""}${TIPS[key] ? ` title="${TIPS[key]}"` : ""} data-k="${key}" aria-sort="${key === k
       ? (dir < 0 ? "descending" : "ascending") : "none"}">${name}</th>`;
     thead.innerHTML = `<tr><th class="rank">#</th>` + (one ? th("s", "Season", "season") : `<th class="name">Player</th>`) +
-      `<th class="team">Team</th>` + COLUMNS[state.view].map(([key, name]) => th(key, name)).join("") + `</tr>`;
+      `<th class="team">Team</th>` + columns().map(([key, name]) => th(key, name)).join("") + `</tr>`;
     table.className = one ? "career" : "";
   }
   thead.addEventListener("click", e => {
@@ -434,10 +445,12 @@
     // a team code opens its season on that team; in the season list the chosen team's code clears it
     const teams = (tm, at) => tm.split("/").map(c =>
       `<a href="${esc(addr(at, one || c !== state.team ? c : "", null))}">${esc(c)}</a>`).join("/");
-    const cols = COLUMNS[state.view], bold = detail ? ["a", "ws"] : [SIDE_FIELD[state.side]];
+    const cols = columns(), bold = detail ? ["a", "ws"] : [SIDE_FIELD[state.side]];
     const latest = String(data.meta.seasons[0]);      // a player's latest-season row is marked: meta.seasons runs latest first
     // a detail cell as written: leverage without a sign, the rest signed at two decimals
     const detailCell = (key, v) => key === "wl" ? v.toFixed(2) : fmt(v);
+    // a standard error as written: no sign, a dash without one; the same with the percentiles on, which it has none of
+    const errorCell = v => v === null ? "\u2014" : v.toFixed(detail ? 2 : 1);
     tbody.innerHTML = rows.map(p => {
       const links = teams(p.tm, one ? String(p.s) : state.season);
       const first = one ? `<td class="season">${p.s}${similar.has(p.id + ":" + p.s) ? ` <a class="sim" href="similarity.html#player=${p.id}&amp;season=${p.s}" title="Similarity" aria-label="Similarity, ${p.s}">~</a>` : ""}</td>`
@@ -445,6 +458,7 @@
           (phone.matches ? `<span class="tm">${links}</span>` : "") + `</td>`;
       return `<tr${one && String(p.s) === latest ? ' class="now"' : ""}><td class="rank">${p.rank}</td>${first}<td class="team">${links}</td>` + cols.map(([key]) =>
         `<td${bold.includes(key) ? ' class="total"' : ""}${p.c ? shade(p.c[key]) : ""}>${key === "p" ? whole.format(p.p)
+          : ERROR_KEYS.includes(key) ? errorCell(p[key])
           : state.pct ? (p[key] === null ? "—" : Math.round(p[key]))
           : detail ? detailCell(key, p[key]) : fmt1(p[key])}</td>`).join("") + `</tr>`;
     }).join("");
@@ -482,14 +496,17 @@
     const q = v => { if (v === null || v === undefined) return "";
                      const s = String(v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     const rows = state.view === "ratings"
-      ? [["season", "player_id", "player", "team", "offense", "defense", "total", "wosa", "possessions"],
-         ...pairs.map(([per, x]) => [per, x.id, x.n, x.tm, x.o, x.d, x.t, x.w, x.p])]
+      ? [["season", "player_id", "player", "team", "offense", "defense", "total", "wosa", "possessions",
+          ...(data.errors ? ["total_standard_error"] : [])],
+         ...pairs.map(([per, x]) => [per, x.id, x.n, x.tm, x.o, x.d, x.t, x.w, x.p, ...(data.errors ? [x.se] : [])])]
       : [["season", "player_id", "player", "team", "possessions",
           ...["offense", "defense", "total"].flatMap(s => CSV_PIECES.map(k => s + "_" + k)),
-          ...["offense", "defense", "total"].flatMap(s => CSV_WOSA.map(k => s + "_" + k))],
+          ...["offense", "defense", "total"].flatMap(s => CSV_WOSA.map(k => s + "_" + k)),
+          ...(data.errors ? ["offense", "defense", "total"].map(s => s + "_standard_error") : [])],
          ...pairs.map(([per, { id, n, tm, p, x }]) => [per, id, n, tm, p, ...csvPieces(x.o), ...csvPieces(x.d),
                                                       ...csvPieces(x.t), ...x.wo.slice(1), ...x.wd.slice(1),
-                                                      ...x.wt.slice(1)])];
+                                                      ...x.wt.slice(1),
+                                                      ...(data.errors ? x.se || [null, null, null] : [])])];
     const text = "\ufeff" + rows.map(r => r.map(q).join(",")).join("\r\n") + "\r\n";
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const a = Object.assign(document.createElement("a"), { href: url, download: filename });

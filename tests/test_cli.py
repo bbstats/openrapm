@@ -443,3 +443,16 @@ def test_the_part_season_rows_and_the_season_so_far_are_shares_between_0_and_1()
     assert cli.chosen_settings(none).prior.part_season_shares == ()
     folds = cli.build_parser().parse_args(["folds", "--models", "m", "--base", "b", "--cut", "0.25"])
     assert folds.cut == 0.25
+
+
+def test_folds_rate_a_season_in_progress_as_its_build_does_only_when_asked():
+    assert _parse("folds", "--models", "m", "--base", "b").in_progress is False
+    assert _parse("folds", "--models", "m", "--base", "b", "--in-progress").in_progress is True
+
+
+def test_errors_default_to_the_published_build_its_fold_seasons_and_its_tenth_held_back_folds():
+    args = _parse("errors")
+    first, last = PRODUCT.shrink.fold_seasons
+    assert args.name == "product" and args.seasons == list(range(first, last + 1))
+    assert args.folds == PRODUCT.shrink.extrapolate_folds_tag
+    assert _parse("errors", "--seasons", "2027", "--folds", "daily_k10").seasons == [2027]
