@@ -171,8 +171,8 @@
   // side's pieces and its WOSA's inputs
   // se is the total's standard error and sa the shown side's (meta.fields has "se" once openrapm errors has run);
   // without them in the file the two columns are left out
-  const COLUMNS = { ratings: [["o", "Offense"], ["d", "Defense"], ["t", "Total"], ["se", "\u00b1"], ["w", "WOSA"], ["p", "Poss."]],
-                    detail: [...PIECES, ["a", "OpenRAPM"], ["sa", "\u00b1"], ["p", "Poss."], ...WOSA_COLS] };
+  const COLUMNS = { ratings: [["o", "Offense"], ["d", "Defense"], ["t", "Total"], ["se", "SE"], ["w", "WOSA"], ["p", "Poss."]],
+                    detail: [...PIECES, ["a", "OpenRAPM"], ["sa", "SE"], ["p", "Poss."], ...WOSA_COLS] };
   const ERROR_KEYS = ["se", "sa"];
   const SIDE_ERROR = { off: 0, def: 1, total: 2 };
   const columns = () => COLUMNS[state.view].filter(([key]) => data && data.errors || !ERROR_KEYS.includes(key));

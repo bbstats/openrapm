@@ -14363,7 +14363,7 @@ progress included; one column beside Total holding the total's, the offense's an
   boosters, the boosters told the share of the season played, the prior scales held and blended by it.  2027's 30
   ratings took 119 seconds, every leak check passed.
 - The site: the Detail file's rows end with [offense, defense, total] and the list file's with the total's, only when
-  the errors file is beside the ratings table.  The Ratings page: a column headed ± beside Total, one decimal, and
+  the errors file is beside the ratings table.  The Ratings page: a column headed SE beside Total, one decimal, and
   beside OpenRAPM in Detail, two decimals; the downloads carry them.  Without the field in the data the page is as it
   was.
 - The morning job: the build keeps its boosters, then the 30 ratings and `openrapm errors --seasons 2027`.  Neither
