@@ -421,12 +421,13 @@
     $("through").textContent = through ? " · through " + day(through) : "";
     let rows;
     if (!one) {
-      // every player of the season is ranked first and the team and name filters come after, so a player found
-      // either way keeps his rank among all of them
+      // every player of the season is ranked first, high to low on the rating (OpenRAPM on the chosen side, whatever
+      // column is sorted), and the team and name filters come after, so a player found either way keeps his rank
       const q = fold(state.q);
       const all = data.rows[state.season].map(r => shownRow(r, state.side, state.season));
-      all.sort(byKey(k, dir));
+      all.sort(byKey(detail ? "a" : SIDE_FIELD[state.side], -1));
       all.forEach((r, i) => { r.rank = i + 1; });
+      all.sort(byKey(k, dir));
       const rookieIds = rookiesOf(state.season);
       rows = all.filter(r => (!state.team || r.tm.split("/").includes(state.team)) && (!q || fold(r.n).includes(q)) &&
                              (!state.rookies || rookieIds.has(r.id)));
